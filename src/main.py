@@ -7,14 +7,12 @@ import streamlit as st
 
 import charts
 import data
-import style
 
 st.set_page_config(
     page_title="Alimentação Escolar",
     page_icon="🍽️",
     layout="wide",
 )
-style.injetar_css()
 
 
 @st.cache_data

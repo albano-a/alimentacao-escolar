@@ -6,10 +6,13 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 
-import style
-
 REFEICOES = ["Desjejum", "Lanche", "Almoço", "Janta"]
-CORES_REFEICOES = dict(zip(REFEICOES, style.PALETA_CATEGORICA))
+CORES_REFEICOES = {
+    "Desjejum": "#4C78A8",
+    "Lanche": "#F58518",
+    "Almoço": "#54A24B",
+    "Janta": "#E45756",
+}
 
 
 def grafico_total_por_escola(df: pd.DataFrame, top_n: int | None = None) -> go.Figure:
@@ -23,11 +26,10 @@ def grafico_total_por_escola(df: pd.DataFrame, top_n: int | None = None) -> go.F
         y="Escola",
         orientation="h",
         color="Polo" if "Polo" in dados.columns else None,
-        color_discrete_sequence=style.PALETA_CATEGORICA,
         title="Total de refeições por escola",
     )
     fig.update_layout(yaxis_title="", height=max(400, 22 * len(dados)))
-    return style.aplicar_tema_grafico(fig)
+    return fig
 
 
 def grafico_total_por_tipo(df: pd.DataFrame) -> go.Figure:
@@ -41,7 +43,7 @@ def grafico_total_por_tipo(df: pd.DataFrame) -> go.Figure:
         title="Total de refeições por tipo",
     )
     fig.update_layout(showlegend=False, xaxis_title="")
-    return style.aplicar_tema_grafico(fig)
+    return fig
 
 
 def grafico_composicao_percentual(df: pd.DataFrame) -> go.Figure:
@@ -59,7 +61,7 @@ def grafico_composicao_percentual(df: pd.DataFrame) -> go.Figure:
         xaxis_title="", yaxis_title="Participação (%)",
         legend_title="Refeição", xaxis_tickangle=-45, barmode="stack",
     )
-    return style.aplicar_tema_grafico(fig)
+    return fig
 
 
 def grafico_por_polo(df: pd.DataFrame) -> go.Figure:
@@ -68,11 +70,10 @@ def grafico_por_polo(df: pd.DataFrame) -> go.Figure:
     agregado = agregado.sort_values("Total de refeições", ascending=False)
     fig = px.bar(
         agregado, x="Polo", y="Total de refeições", color="Polo",
-        color_discrete_sequence=style.PALETA_CATEGORICA,
         title="Total de refeições por polo",
     )
     fig.update_layout(xaxis_title="", showlegend=False)
-    return style.aplicar_tema_grafico(fig)
+    return fig
 
 
 def heatmap_media_diaria(df: pd.DataFrame) -> go.Figure:
@@ -82,13 +83,13 @@ def heatmap_media_diaria(df: pd.DataFrame) -> go.Figure:
     heat.columns = [c.replace("Média/dia - ", "") for c in heat.columns]
     fig = px.imshow(
         heat,
-        color_continuous_scale=style.ESCALA_SEQUENCIAL,
+        color_continuous_scale="YlOrRd",
         aspect="auto",
         labels=dict(x="Tipo de refeição", y="Escola", color="Refeições/dia"),
         title="Média diária de refeições por escola",
     )
     fig.update_layout(height=max(400, 22 * len(heat)))
-    return style.aplicar_tema_grafico(fig)
+    return fig
 
 
 def grafico_dias_letivos_vs_total(df: pd.DataFrame) -> go.Figure:
@@ -96,12 +97,10 @@ def grafico_dias_letivos_vs_total(df: pd.DataFrame) -> go.Figure:
     fig = px.scatter(
         df, x="Dias letivos", y="Total de refeições",
         color="Polo" if "Polo" in df.columns else None,
-        color_discrete_sequence=style.PALETA_CATEGORICA,
         hover_name="Escola", size="Total de refeições",
         title="Dias letivos x Total de refeições",
     )
-    fig.update_traces(marker=dict(line=dict(width=1, color=style.PRETO)))
-    return style.aplicar_tema_grafico(fig)
+    return fig
 
 
 def grafico_dados_faltantes(df: pd.DataFrame) -> go.Figure:
@@ -115,24 +114,19 @@ def grafico_dados_faltantes(df: pd.DataFrame) -> go.Figure:
         title="Escolas sem registro por tipo de refeição",
     )
     fig.update_layout(showlegend=False, xaxis_title="")
-    return style.aplicar_tema_grafico(fig)
+    return fig
 
 
 def grafico_perfil_escola(linha: pd.Series) -> go.Figure:
     """Composição das refeições de uma única escola (donut)."""
     cols = [c for c in REFEICOES if c in linha.index and pd.notna(linha[c])]
-    cores = [CORES_REFEICOES[c] for c in cols]
     fig = px.pie(
         names=cols, values=[linha[c] for c in cols],
         color=cols, color_discrete_map=CORES_REFEICOES,
         hole=0.55, title="Composição de refeições da escola",
     )
-    fig.update_traces(
-        textinfo="percent+label",
-        textfont=dict(color=[style.texto_contrastante(c) for c in cores]),
-        marker=dict(line=dict(color=style.BRANCO, width=2)),
-    )
-    return style.aplicar_tema_grafico(fig)
+    fig.update_traces(textinfo="percent+label")
+    return fig
 
 
 def grafico_comparacao_escola(linha: pd.Series, df: pd.DataFrame) -> go.Figure:
@@ -157,8 +151,7 @@ def grafico_comparacao_escola(linha: pd.Series, df: pd.DataFrame) -> go.Figure:
     )
     fig = px.bar(
         comparacao, x="Refeição", y="Média/dia", color="Referência",
-        color_discrete_sequence=style.PALETA_CATEGORICA,
         barmode="group", title="Escola x média do polo x média geral (refeições/dia)",
     )
     fig.update_layout(xaxis_title="")
-    return style.aplicar_tema_grafico(fig)
+    return fig
