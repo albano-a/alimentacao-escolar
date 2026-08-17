@@ -162,8 +162,8 @@ def carregar_umei_creches() -> pd.DataFrame:
         ["POLO 5", "UMEI Barreto - Therezinha Calil (Creche)/(1~3 anos)", 18, 2037, 2037, 1703, 2037],
         ["POLO 5", "UMEI Barreto - Therezinha Calil (Pré-escolar)", 18, 424, 424, 365, 424],
         # POLO 6
-        ["POLO 6", "UMEI Geraldo Montedônio Bezerra de Menezes (Creche)/(1~3 anos)", 19, 955, 963, 963, 963],
-        ["POLO 6", "UMEI Geraldo Montedônio Bezerra de Menezes (Pré-escolar)", 19, 919, 3149, 914, 226],
+        ["POLO 6", "UMEI Geraldo Montedônio Bezerra de Menezes (Creche)/(1~3 anos)", 19, 1137, 1122, 1122, 1122],
+        ["POLO 6", "UMEI Geraldo Montedônio Bezerra de Menezes (Pré-escolar)", 19, 1170, 1241, 1183, 1183],
         ["POLO 6", "UMEI Senador Vasconcelos Torres (Creche)/(1~3 anos)", 20, 586, 99, 586, 487],
         ["POLO 6", "UMEI Senador Vasconcelos Torres (Pré-escolar)", 20, 1072, 191, 1072, 881],
         ["POLO 6", "UMEI Darcy Ribeiro (Creche)/(1~3 anos)", 20, 2321, 2321, 2321, 2321],
