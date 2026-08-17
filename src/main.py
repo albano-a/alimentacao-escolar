@@ -15,8 +15,9 @@ st.set_page_config(
 )
 
 
-@st.cache_data
+@st.cache_data(ttl=60)
 def carregar_dados() -> dict[str, pd.DataFrame]:
+    """Recarrega da planilha do Google Sheets a cada 60s, para refletir edições feitas nela."""
     return data.carregar_todos()
 
 
@@ -141,7 +142,16 @@ def main() -> None:
     st.title("🍽️ Alimentação Escolar — Dashboard")
     st.caption("Visão interativa da demanda de refeições por escola, tipo e polo.")
 
-    datasets = carregar_dados()
+    try:
+        datasets = carregar_dados()
+    except Exception:
+        st.error(
+            "Não foi possível carregar os dados da planilha do Google Sheets. "
+            "Verifique se ela ainda está compartilhada como 'qualquer pessoa com "
+            "o link pode visualizar' e se as 3 abas mantêm os nomes esperados."
+        )
+        st.stop()
+
     pagina, df_filtrado, conjunto = barra_lateral(datasets)
 
     st.subheader(f"{conjunto} · {pagina}")
