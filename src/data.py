@@ -298,9 +298,9 @@ def carregar_ensino_fundamental() -> pd.DataFrame:
 
 
 DATASETS = {
-    "Escolas Municipais (E.M.)": carregar_escolas_regulares,
-    "UMEIs, Creches e C.C.": carregar_umei_creches,
-    "Ensino Fundamental / E.J.A. por Polo": carregar_ensino_fundamental,
+    "Unidades Integrais - Ensino Fundamental": carregar_escolas_regulares,
+    "Unidades Municipais de Educação Infantil (UMEI) - Integrais": carregar_umei_creches,
+    "Unidades Escolar - Parcial - Ensino Fundamental": carregar_ensino_fundamental,
 }
 
 

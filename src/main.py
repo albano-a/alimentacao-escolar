@@ -21,6 +21,8 @@ def carregar_dados() -> dict[str, pd.DataFrame]:
 
 
 def formatar(valor: float, casas: int = 0) -> str:
+    if pd.isna(valor):
+        return "—"
     return f"{valor:,.{casas}f}".replace(",", "#").replace(".", ",").replace("#", ".")
 
 
@@ -109,7 +111,7 @@ def pagina_resumo_escola(df: pd.DataFrame) -> None:
     with st.container(border=True):
         col1, col2, col3, col4 = st.columns(4)
         col1.metric("Polo", linha["Polo"])
-        col2.metric("Dias letivos", int(linha["Dias letivos"]))
+        col2.metric("Dias letivos", formatar(linha["Dias letivos"]))
         col3.metric("Total de refeições", formatar(linha["Total de refeições"]))
         col4.metric("Média/dia (total)", formatar(linha["Média/dia - Total"], 1))
 
