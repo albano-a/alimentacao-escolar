@@ -24,6 +24,38 @@ ABAS = {
 
 COLUNAS_BASE = ["Polo", "Escola", "Dias letivos", *REFEICOES]
 
+# A planilha registra a categoria de cada turma entre parênteses no próprio nome
+# da escola (ex.: "UMEI X (Creche)/(1~3 anos)", "E.M. Y (E.F. - 1º e 2º ciclo)").
+# Cada marcador abaixo é um trecho único o suficiente para identificar a categoria
+# mesmo com variações de abreviação ("1~3 anos" vs "1~3 a.") encontradas na planilha.
+_MARCADORES_CATEGORIA = [
+    ("0~11", "Creche - 0~11 meses"),
+    ("1~3", "Creche - 1~3 anos"),
+    ("Pré-escola", "Pré-escolar"),
+    ("E.J.A", "E.J.A."),
+    ("1º e 2º ciclo", "E.F. - 1º e 2º ciclo"),
+    ("3º e 4º ciclo", "E.F. - 3º e 4º ciclo"),
+]
+
+# Agrupamento usado nos medidores da dashboard: as categorias de creche/pré-escola
+# têm escala bem diferente das de ensino fundamental/EJA, então são exibidas separadas.
+GRUPOS_CATEGORIA = {
+    "Creche - 0~11 meses": "Creche e pré-escola",
+    "Creche - 1~3 anos": "Creche e pré-escola",
+    "Pré-escolar": "Creche e pré-escola",
+    "E.F. - 1º e 2º ciclo": "E.F. e E.J.A.",
+    "E.F. - 3º e 4º ciclo": "E.F. e E.J.A.",
+    "E.J.A.": "E.F. e E.J.A.",
+}
+
+
+def _extrai_categoria(escola: str) -> str:
+    """Extrai a categoria (Creche, Pré-escolar, E.F., E.J.A.) do nome da escola."""
+    for marcador, categoria in _MARCADORES_CATEGORIA:
+        if marcador in escola:
+            return categoria
+    return "Não informado"
+
 
 def _normaliza_polo(valor: str) -> str:
     valor = str(valor).strip()
@@ -51,6 +83,12 @@ def _carregar_aba(nome_aba: str) -> pd.DataFrame:
 
     df["Polo"] = df["Polo"].map(_normaliza_polo)
     df["Escola"] = df["Escola"].astype(str).str.strip()
+    df.insert(df.columns.get_loc("Escola") + 1, "Categoria", df["Escola"].map(_extrai_categoria))
+    df.insert(
+        df.columns.get_loc("Categoria") + 1,
+        "Grupo categoria",
+        df["Categoria"].map(lambda c: GRUPOS_CATEGORIA.get(c, "Não informado")),
+    )
     df["Dias letivos"] = _para_numero(df["Dias letivos"])
     for col in REFEICOES:
         df[col] = _para_numero(df[col])

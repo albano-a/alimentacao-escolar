@@ -8,6 +8,8 @@ import streamlit as st
 import charts
 import data
 
+GRUPOS_ORDEM = ["Creche e pré-escola", "E.F. e E.J.A."]
+
 st.set_page_config(
     page_title="Alimentação Escolar",
     page_icon="🍽️",
@@ -37,11 +39,17 @@ def barra_lateral(datasets: dict[str, pd.DataFrame]) -> tuple[str, pd.DataFrame,
         polos_selecionados = st.multiselect("Polo", polos, default=polos)
         df_polo = df[df["Polo"].isin(polos_selecionados)]
 
-        escolas = sorted(df_polo["Escola"].dropna().unique())
+        categorias = sorted(df_polo["Categoria"].dropna().unique())
+        categorias_selecionadas = st.multiselect(
+            "Categoria", categorias, default=categorias, placeholder="Todas as categorias"
+        )
+        df_categoria = df_polo[df_polo["Categoria"].isin(categorias_selecionadas)]
+
+        escolas = sorted(df_categoria["Escola"].dropna().unique())
         escolas_selecionadas = st.multiselect(
             "Escola", escolas, default=escolas, placeholder="Todas as escolas"
         )
-        df_filtrado = df_polo[df_polo["Escola"].isin(escolas_selecionadas)]
+        df_filtrado = df_categoria[df_categoria["Escola"].isin(escolas_selecionadas)]
 
         st.divider()
         pagina = st.radio("Página", ["Visão geral", "Resumo por escola"])
@@ -50,12 +58,45 @@ def barra_lateral(datasets: dict[str, pd.DataFrame]) -> tuple[str, pd.DataFrame,
 
 
 def cartao_kpis(df: pd.DataFrame) -> None:
+    grupos_presentes = df["Grupo categoria"].dropna().unique()
+
     with st.container(border=True):
         col1, col2, col3, col4 = st.columns(4)
         col1.metric("Escolas/Unidades", formatar(df["Escola"].nunique()))
         col2.metric("Total de refeições", formatar(df["Total de refeições"].sum()))
-        col3.metric("Média/dia (total)", formatar(df["Média/dia - Total"].mean(), 1))
+        if len(grupos_presentes) > 1:
+            col3.metric(
+                "Média/dia (total)",
+                "—",
+                help=(
+                    "Com mais de um grupo de categoria selecionado (Creche e pré-escola "
+                    "e E.F. e E.J.A. têm escalas muito diferentes), uma média única não é "
+                    "representativa. Veja a média/dia por categoria abaixo."
+                ),
+            )
+        else:
+            col3.metric("Média/dia (total)", formatar(df["Média/dia - Total"].mean(), 1))
         col4.metric("Polos", df["Polo"].nunique())
+
+    cartao_kpis_por_categoria(df, grupos_presentes)
+
+
+def cartao_kpis_por_categoria(df: pd.DataFrame, grupos_presentes) -> None:
+    grupos = [g for g in GRUPOS_ORDEM if g in grupos_presentes]
+    if len(grupos) < 2:
+        return
+
+    with st.container(border=True):
+        st.caption("Medidores por categoria")
+        cols = st.columns(len(grupos))
+        for col, grupo in zip(cols, grupos):
+            sub = df[df["Grupo categoria"] == grupo]
+            with col:
+                st.markdown(f"**{grupo}**")
+                c1, c2, c3 = st.columns(3)
+                c1.metric("Escolas", formatar(sub["Escola"].nunique()))
+                c2.metric("Total", formatar(sub["Total de refeições"].sum()))
+                c3.metric("Média/dia", formatar(sub["Média/dia - Total"].mean(), 1))
 
 
 def pagina_visao_geral(df: pd.DataFrame) -> None:
@@ -108,6 +149,8 @@ def pagina_resumo_escola(df: pd.DataFrame) -> None:
     escolas = sorted(df["Escola"].unique())
     escola_selecionada = st.selectbox("Escolha a escola", escolas)
     linha = df.loc[df["Escola"] == escola_selecionada].iloc[0]
+
+    st.caption(f"Categoria: {linha['Categoria']}")
 
     with st.container(border=True):
         col1, col2, col3, col4 = st.columns(4)
