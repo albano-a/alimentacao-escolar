@@ -15,9 +15,18 @@ CORES_REFEICOES = {
 }
 
 
+def _agrupar_por_escola(df: pd.DataFrame, colunas: list[str]) -> pd.DataFrame:
+    """Soma as colunas informadas por escola, evitando que uma escola com mais de
+    uma modalidade/turma cadastrada (ex.: E.F. e E.J.A. na mesma escola) apareça
+    duplicada nos gráficos."""
+    chave = [c for c in ["Polo", "Escola"] if c in df.columns]
+    return df.groupby(chave, as_index=False)[colunas].sum()
+
+
 def grafico_total_por_escola(df: pd.DataFrame, top_n: int | None = None) -> go.Figure:
     """Ranking horizontal do total de refeições por escola."""
-    dados = df.sort_values("Total de refeições", ascending=True)
+    dados = _agrupar_por_escola(df, ["Total de refeições"])
+    dados = dados.sort_values("Total de refeições", ascending=True)
     if top_n:
         dados = dados.tail(top_n)
     fig = px.bar(
@@ -49,10 +58,10 @@ def grafico_total_por_tipo(df: pd.DataFrame) -> go.Figure:
 def grafico_composicao_percentual(df: pd.DataFrame) -> go.Figure:
     """Participação percentual de cada tipo de refeição por escola (100% empilhado)."""
     cols = [c for c in REFEICOES if c in df.columns]
-    pct = df[["Escola"] + cols].copy()
-    pct[cols] = pct[cols].div(pct[cols].sum(axis=1), axis=0) * 100
-    pct = pct.merge(df[["Escola", "Total de refeições"]], on="Escola")
-    pct = pct.sort_values("Total de refeições", ascending=False).drop(columns="Total de refeições")
+    pct = _agrupar_por_escola(df, cols)
+    total_linha = pct[cols].sum(axis=1)
+    pct[cols] = pct[cols].div(total_linha, axis=0) * 100
+    pct = pct.assign(_total=total_linha).sort_values("_total", ascending=False).drop(columns="_total")
     fig = px.bar(
         pct, x="Escola", y=cols, title="Composição percentual das refeições por escola",
         color_discrete_map=CORES_REFEICOES,
@@ -79,7 +88,8 @@ def grafico_por_polo(df: pd.DataFrame) -> go.Figure:
 def heatmap_media_diaria(df: pd.DataFrame) -> go.Figure:
     """Mapa de calor da média diária de refeições por escola e tipo."""
     cols = [f"Média/dia - {c}" for c in REFEICOES if f"Média/dia - {c}" in df.columns]
-    heat = df.set_index("Escola")[cols].fillna(0)
+    agregado = _agrupar_por_escola(df, cols)
+    heat = agregado.set_index("Escola")[cols].fillna(0)
     heat.columns = [c.replace("Média/dia - ", "") for c in heat.columns]
     fig = px.imshow(
         heat,
@@ -100,6 +110,35 @@ def grafico_dias_letivos_vs_total(df: pd.DataFrame) -> go.Figure:
         hover_name="Escola", size="Total de refeições",
         title="Dias letivos x Total de refeições",
     )
+    return fig
+
+
+_CORES_CONFORMIDADE = {
+    "Conforme": "#54A24B",
+    "Não conforme": "#E45756",
+    "Não avaliável": "#B0B0B0",
+}
+
+
+def grafico_conformidade_fnde(df: pd.DataFrame) -> go.Figure:
+    """Quantidade de turmas conformes/não conformes/não avaliáveis por categoria,
+    segundo o mínimo de refeições do Art. 14 da Resolução CD/FNDE nº 26/2013."""
+    rotulo = df["Conforme FNDE (Art. 14)"].map(
+        {True: "Conforme", False: "Não conforme"}
+    ).fillna("Não avaliável")
+    contagem = (
+        df.assign(Status=rotulo)
+        .groupby(["Categoria", "Status"], as_index=False)
+        .size()
+        .rename(columns={"size": "Turmas"})
+    )
+    fig = px.bar(
+        contagem, x="Categoria", y="Turmas", color="Status",
+        color_discrete_map=_CORES_CONFORMIDADE,
+        category_orders={"Status": list(_CORES_CONFORMIDADE.keys())},
+        title="Conformidade FNDE (Art. 14) por categoria",
+    )
+    fig.update_layout(xaxis_title="", xaxis_tickangle=-30)
     return fig
 
 
