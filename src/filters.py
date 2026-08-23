@@ -1,10 +1,19 @@
 """Barra lateral: filtros (Conjunto, Polo, Categoria, Escola). A navegação entre
-páginas fica numa navbar no topo (ver main.py), não mais aqui."""
+páginas fica numa navbar no topo (ver main.py), não mais aqui.
+
+Os multiselects começam vazios (nada pré-selecionado como "pill") e nenhuma
+seleção equivale a "todas as opções" — isso evita uma barra lateral gigante
+com uma pill por escola/categoria logo de cara, o que é especialmente ruim
+no celular, onde a barra ocupa a tela inteira."""
 
 from __future__ import annotations
 
 import pandas as pd
 import streamlit as st
+
+
+def _selecionados_ou_todos(selecionados: list, opcoes: list) -> list:
+    return selecionados if selecionados else opcoes
 
 
 def barra_lateral(df: pd.DataFrame) -> pd.DataFrame:
@@ -13,24 +22,28 @@ def barra_lateral(df: pd.DataFrame) -> pd.DataFrame:
 
         conjuntos = sorted(df["Conjunto"].dropna().unique())
         conjuntos_selecionados = st.multiselect(
-            "Conjunto de dados", conjuntos, default=conjuntos
+            "Conjunto de dados", conjuntos, placeholder="Todos os conjuntos"
         )
-        df_conjunto = df[df["Conjunto"].isin(conjuntos_selecionados)]
+        df_conjunto = df[df["Conjunto"].isin(_selecionados_ou_todos(conjuntos_selecionados, conjuntos))]
 
         polos = sorted(df_conjunto["Polo"].dropna().unique())
-        polos_selecionados = st.multiselect("Polo", polos, default=polos)
-        df_polo = df_conjunto[df_conjunto["Polo"].isin(polos_selecionados)]
+        polos_selecionados = st.multiselect("Polo", polos, placeholder="Todos os polos")
+        df_polo = df_conjunto[df_conjunto["Polo"].isin(_selecionados_ou_todos(polos_selecionados, polos))]
 
         categorias = sorted(df_polo["Categoria"].dropna().unique())
         categorias_selecionadas = st.multiselect(
-            "Categoria", categorias, default=categorias, placeholder="Todas as categorias"
+            "Categoria", categorias, placeholder="Todas as categorias"
         )
-        df_categoria = df_polo[df_polo["Categoria"].isin(categorias_selecionadas)]
+        df_categoria = df_polo[
+            df_polo["Categoria"].isin(_selecionados_ou_todos(categorias_selecionadas, categorias))
+        ]
 
         escolas = sorted(df_categoria["Escola"].dropna().unique())
         escolas_selecionadas = st.multiselect(
-            "Escola", escolas, default=escolas, placeholder="Todas as escolas"
+            "Escola", escolas, placeholder="Todas as escolas"
         )
-        df_filtrado = df_categoria[df_categoria["Escola"].isin(escolas_selecionadas)]
+        df_filtrado = df_categoria[
+            df_categoria["Escola"].isin(_selecionados_ou_todos(escolas_selecionadas, escolas))
+        ]
 
     return df_filtrado

@@ -27,6 +27,22 @@ st.set_page_config(
     layout="wide",
 )
 
+# Ajustes só de espaçamento/tamanho para telas estreitas (sem mexer em cor/tema):
+# menos preenchimento nas laterais e métricas menores, para caber os cartões de
+# KPI (que ficam em colunas aninhadas) sem apertar demais os números.
+st.markdown(
+    """
+    <style>
+    @media (max-width: 640px) {
+        .block-container { padding: 1rem 0.75rem; }
+        [data-testid="stMetricValue"] { font-size: 1.3rem; }
+        [data-testid="stMetricLabel"] { font-size: 0.75rem; }
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
 
 @st.cache_data(ttl=60)
 def carregar_dados() -> pd.DataFrame:
