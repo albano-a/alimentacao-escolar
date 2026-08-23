@@ -1,14 +1,13 @@
-"""Barra lateral: filtros (Conjunto, Polo, Categoria, Escola) e navegação entre páginas."""
+"""Barra lateral: filtros (Conjunto, Polo, Categoria, Escola). A navegação entre
+páginas fica numa navbar no topo (ver main.py), não mais aqui."""
 
 from __future__ import annotations
 
 import pandas as pd
 import streamlit as st
 
-from paginas import PAGINAS
 
-
-def barra_lateral(df: pd.DataFrame) -> tuple[str, pd.DataFrame]:
+def barra_lateral(df: pd.DataFrame) -> pd.DataFrame:
     with st.sidebar:
         st.subheader("Filtros")
 
@@ -34,7 +33,4 @@ def barra_lateral(df: pd.DataFrame) -> tuple[str, pd.DataFrame]:
         )
         df_filtrado = df_categoria[df_categoria["Escola"].isin(escolas_selecionadas)]
 
-        st.divider()
-        pagina = st.radio("Página", list(PAGINAS.keys()))
-
-    return pagina, df_filtrado
+    return df_filtrado

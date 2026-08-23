@@ -160,8 +160,8 @@ def _carregar_aba(nome_aba: str) -> pd.DataFrame:
 
     df["Total de refeições"] = df[REFEICOES].sum(axis=1, min_count=1)
     for col in REFEICOES:
-        df[f"Média/dia - {col}"] = df[col] / df["Dias letivos"]
-    df["Média/dia - Total"] = df["Total de refeições"] / df["Dias letivos"]
+        df[f"Média/dia - {col}"] = (df[col] / df["Dias letivos"]).round(1)
+    df["Média/dia - Total"] = (df["Total de refeições"] / df["Dias letivos"]).round(1)
     return df
 
 

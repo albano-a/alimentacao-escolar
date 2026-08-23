@@ -142,6 +142,57 @@ def grafico_conformidade_fnde(df: pd.DataFrame) -> go.Figure:
     return fig
 
 
+def _status_fnde_por_escola(serie: pd.Series) -> str:
+    """Resume várias turmas de uma escola num único status: uma turma não
+    conforme já marca a escola inteira, senão conforme só se todas avaliáveis
+    estiverem ok, senão não avaliável."""
+    if (serie == False).any():  # noqa: E712
+        return "Não conforme"
+    if serie.notna().any() and serie.dropna().all():
+        return "Conforme"
+    return "Não avaliável"
+
+
+def grafico_mapa_escolas(df: pd.DataFrame) -> go.Figure:
+    """Mapa com uma marcação por escola (requer colunas latitude/longitude já
+    casadas via localizacao.py), colorida pela conformidade FNDE (Art. 14) e
+    com o tamanho proporcional ao total de refeições servidas."""
+    status = (
+        df.groupby("Escola")["Conforme FNDE (Art. 14)"]
+        .apply(_status_fnde_por_escola)
+        .rename("Status FNDE")
+    )
+    cols_refeicoes = [c for c in REFEICOES if c in df.columns]
+    agregado = df.groupby(
+        ["Escola", "Polo", "latitude", "longitude"], as_index=False
+    ).agg(
+        **{
+            "Total de refeições": ("Total de refeições", "sum"),
+            "Conjunto": ("Conjunto", lambda s: " / ".join(sorted(set(s)))),
+            **{c: (c, "sum") for c in cols_refeicoes},
+        }
+    )
+    agregado = agregado.merge(status, on="Escola")
+
+    fig = px.scatter_map(
+        agregado,
+        lat="latitude", lon="longitude",
+        color="Status FNDE", size="Total de refeições",
+        hover_name="Escola",
+        hover_data={
+            "Polo": True, "Conjunto": True, "Total de refeições": True,
+            **{c: True for c in cols_refeicoes},
+            "latitude": False, "longitude": False,
+        },
+        color_discrete_map=_CORES_CONFORMIDADE,
+        category_orders={"Status FNDE": list(_CORES_CONFORMIDADE.keys())},
+        zoom=10.5, height=650,
+        title="Escolas no mapa (tamanho = total de refeições, cor = conformidade FNDE)",
+    )
+    fig.update_layout(map_style="carto-darkmatter", margin=dict(l=0, r=0, t=60, b=0))
+    return fig
+
+
 def grafico_dados_faltantes(df: pd.DataFrame) -> go.Figure:
     """Quantidade de valores ausentes por coluna de refeição (indica meses/tipos sem oferta)."""
     cols = [c for c in REFEICOES if c in df.columns]
@@ -173,8 +224,8 @@ def grafico_comparacao_escola(linha: pd.Series, df: pd.DataFrame) -> go.Figure:
     polo = linha.get("Polo")
     media_cols = [f"Média/dia - {c}" for c in REFEICOES if f"Média/dia - {c}" in df.columns]
     escola_vals = [linha.get(c) for c in media_cols]
-    polo_vals = df.loc[df["Polo"] == polo, media_cols].mean()
-    geral_vals = df[media_cols].mean()
+    polo_vals = df.loc[df["Polo"] == polo, media_cols].mean().round(1)
+    geral_vals = df[media_cols].mean().round(1)
 
     rotulos = [c.replace("Média/dia - ", "") for c in media_cols]
     comparacao = pd.DataFrame(

@@ -60,6 +60,7 @@ def renderizar(df: pd.DataFrame) -> None:
             st.warning(f"⚠️ {len(nao_conformes_df)} turma(s) abaixo do mínimo exigido.")
             colunas = [
                 "Conjunto", "Polo", "Escola", "Categoria", "Regime",
+                *[c for c in charts.REFEICOES if c in nao_conformes_df.columns],
                 "Refeições servidas", "Mínimo FNDE (Art. 14)",
             ]
             st.dataframe(

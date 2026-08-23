@@ -11,6 +11,9 @@ Ponto de entrada do app: só orquestra os módulos abaixo, sem lógica própria.
 
 from __future__ import annotations
 
+import functools
+import unicodedata
+
 import pandas as pd
 import streamlit as st
 
@@ -46,10 +49,18 @@ def main() -> None:
         )
         st.stop()
 
-    pagina, df_filtrado = filters.barra_lateral(df)
+    df_filtrado = filters.barra_lateral(df)
 
-    st.subheader(pagina)
-    paginas.PAGINAS[pagina](df_filtrado)
+    def _slug(nome: str) -> str:
+        sem_acento = unicodedata.normalize("NFKD", nome).encode("ascii", "ignore").decode()
+        return sem_acento.lower().replace(" ", "-")
+
+    paginas_navegacao = [
+        st.Page(functools.partial(renderizar, df_filtrado), title=nome, url_path=_slug(nome))
+        for nome, renderizar in paginas.PAGINAS.items()
+    ]
+    navegacao = st.navigation(paginas_navegacao, position="top")
+    navegacao.run()
 
 
 if __name__ == "__main__":

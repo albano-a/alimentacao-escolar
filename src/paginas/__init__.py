@@ -5,10 +5,11 @@ o main.py leem daqui, então adicionar uma página é só criar o arquivo e soma
 uma linha neste dicionário.
 """
 
-from . import fnde, resumo_escola, visao_geral
+from . import fnde, mapa, resumo_escola, visao_geral
 
 PAGINAS = {
     "Visão geral": visao_geral.renderizar,
     "Resumo por escola": resumo_escola.renderizar,
     "Conformidade FNDE": fnde.renderizar,
+    "Mapa": mapa.renderizar,
 }
