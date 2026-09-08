@@ -103,10 +103,13 @@ def heatmap_media_diaria(df: pd.DataFrame) -> go.Figure:
 
 
 def grafico_dias_letivos_vs_total(df: pd.DataFrame) -> go.Figure:
-    """Dispersão entre dias letivos e total de refeições, evidenciando outliers."""
+    """Dispersão entre dias letivos e total de refeições, evidenciando outliers.
+    Turmas sem nenhuma refeição registrada no mês (ainda não lançado, por exemplo)
+    ficam de fora — não têm o que plotar num eixo de total de refeições."""
+    dados = df.dropna(subset=["Total de refeições"])
     fig = px.scatter(
-        df, x="Dias letivos", y="Total de refeições",
-        color="Polo" if "Polo" in df.columns else None,
+        dados, x="Dias letivos", y="Total de refeições",
+        color="Polo" if "Polo" in dados.columns else None,
         hover_name="Escola", size="Total de refeições",
         title="Dias letivos x Total de refeições",
     )
