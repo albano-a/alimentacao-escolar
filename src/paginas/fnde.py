@@ -59,7 +59,7 @@ def renderizar(df: pd.DataFrame) -> None:
         with st.container(border=True):
             st.warning(f"⚠️ {len(nao_conformes_df)} turma(s) abaixo do mínimo exigido.")
             colunas = [
-                "Conjunto", "Polo", "Escola", "Categoria", "Regime",
+                "Mês", "Conjunto", "Polo", "Escola", "Categoria", "Regime",
                 *[c for c in charts.REFEICOES if c in nao_conformes_df.columns],
                 "Refeições servidas", "Mínimo FNDE (Art. 14)",
             ]
@@ -70,7 +70,7 @@ def renderizar(df: pd.DataFrame) -> None:
             )
 
     with st.expander("Ver todas as turmas não avaliáveis (sem piso fixo na resolução)"):
-        colunas = ["Conjunto", "Polo", "Escola", "Categoria", "Regime", "Refeições servidas"]
+        colunas = ["Mês", "Conjunto", "Polo", "Escola", "Categoria", "Regime", "Refeições servidas"]
         st.dataframe(
             df.loc[df["Conforme FNDE (Art. 14)"].isna(), colunas],
             use_container_width=True,
@@ -79,7 +79,7 @@ def renderizar(df: pd.DataFrame) -> None:
 
     with st.expander("Ver todos os dados de conformidade"):
         colunas = [
-            "Conjunto", "Polo", "Escola", "Categoria", "Regime",
+            "Mês", "Conjunto", "Polo", "Escola", "Categoria", "Regime",
             "Refeições servidas", "Mínimo FNDE (Art. 14)", "Conforme FNDE (Art. 14)",
         ]
         st.dataframe(df[colunas], use_container_width=True, hide_index=True)

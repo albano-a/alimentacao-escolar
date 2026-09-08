@@ -6,8 +6,12 @@ na dashboard na próxima atualização (ver o `ttl` do cache em `main.py`).
 
 A planilha usa um layout de relatório, não uma tabela simples: cada aba tem uma
 linha "POLO N" separando os grupos de escolas (em vez de uma coluna Polo), e a
-1ª linha real de dados vem colada ao cabeçalho decorativo do Sheets. `_carregar_aba`
-reconstrói a partir disso uma tabela normal com Polo como coluna.
+1ª linha real de dados vem colada ao cabeçalho decorativo do Sheets. Além disso,
+cada aba concatena um bloco de relatório inteiro por mês (Junho, Julho, ...),
+cada um com sua própria linha "Mês de referência: <Mês> - <Ano>" e seus próprios
+marcadores de POLO/TOTAL. `_carregar_aba` reconstrói a partir disso uma tabela
+normal com Mês e Polo como colunas — novos meses aparecem automaticamente, sem
+precisar mexer no código, desde que sigam o mesmo padrão de linha marcadora.
 """
 
 from __future__ import annotations
@@ -86,6 +90,15 @@ GRUPOS_ORDEM = list(dict.fromkeys(GRUPOS_CATEGORIA.values()))
 
 _PADRAO_MARCADOR_POLO = re.compile(r"^POLO\s*\d+$", re.IGNORECASE)
 _PADRAO_POLO_QUALQUER = re.compile(r"POLO\s*\d+", re.IGNORECASE)
+_PADRAO_MES = re.compile(r"Mês de refer[eê]ncia:\s*([A-Za-zÀ-ÿçÇ]+)\s*-\s*(\d{4})", re.IGNORECASE)
+
+# Só para ordenar o filtro de Mês cronologicamente (a ordem alfabética erra:
+# "Julho" vem antes de "Junho"). Cobre os 12 meses, então funciona para
+# qualquer mês novo que a planilha passar a incluir.
+_MESES_PT = {
+    "janeiro": 1, "fevereiro": 2, "março": 3, "abril": 4, "maio": 5, "junho": 6,
+    "julho": 7, "agosto": 8, "setembro": 9, "outubro": 10, "novembro": 11, "dezembro": 12,
+}
 
 
 def _extrai_categoria(modalidade: str) -> str:
@@ -120,12 +133,34 @@ def _extrai_polo_inicial(celula_cabecalho: object) -> str:
     return _normaliza_polo(encontrado.group()) if encontrado else "POLO 1"
 
 
+def _extrai_mes(texto: object) -> str | None:
+    """Extrai 'Junho/2026' de uma célula com 'Mês de referência: Junho - 2026'
+    (a decorativa da 1ª linha ou a que separa cada bloco de mês). None se não achar."""
+    encontrado = _PADRAO_MES.search(str(texto))
+    if not encontrado:
+        return None
+    nome, ano = encontrado.groups()
+    return f"{nome.strip().capitalize()}/{ano}"
+
+
+def ordenar_meses(meses: list[str]) -> list[str]:
+    """Ordena valores de Mês (\"Junho/2026\") cronologicamente, não por ordem
+    alfabética do nome do mês."""
+
+    def chave(mes: str) -> tuple[int, int]:
+        nome, _, ano = mes.rpartition("/")
+        return (int(ano) if ano.isdigit() else 0, _MESES_PT.get(nome.strip().lower(), 0))
+
+    return sorted(meses, key=chave)
+
+
 def _carregar_aba(nome_aba: str) -> pd.DataFrame:
     """Lê uma aba no formato 'mapa de controle' e devolve uma tabela normal,
     com Polo como coluna e Total/Média recalculados a partir dos dados brutos."""
     bruto = pd.read_csv(_url_aba(nome_aba), header=None, dtype=str)
 
     polo_atual = _extrai_polo_inicial(bruto.iat[0, 1])
+    mes_atual = _extrai_mes(bruto.iat[0, 1]) or "Sem mês"
     linhas = []
     for _, linha in bruto.iloc[1:].iterrows():
         escola = linha[1]
@@ -133,7 +168,15 @@ def _carregar_aba(nome_aba: str) -> pd.DataFrame:
         if pd.isna(escola):
             continue
         escola = str(escola).strip()
-        if not escola or escola.upper().startswith("TOTAL"):
+        if not escola:
+            continue
+        mes_encontrado = _extrai_mes(escola)
+        if mes_encontrado:
+            # Início de um novo bloco de mês (ex.: "Mês de referência: Julho - 2026").
+            # O polo é reatribuído logo em seguida por um marcador "POLO 1" próprio.
+            mes_atual = mes_encontrado
+            continue
+        if escola.upper().startswith("TOTAL"):
             continue
         if pd.isna(modalidade) and _PADRAO_MARCADOR_POLO.match(escola):
             polo_atual = _normaliza_polo(escola)
@@ -141,6 +184,7 @@ def _carregar_aba(nome_aba: str) -> pd.DataFrame:
 
         linhas.append(
             {
+                "Mês": mes_atual,
                 "Polo": polo_atual,
                 "Escola": escola,
                 "Categoria": _extrai_categoria(str(modalidade)),

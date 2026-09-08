@@ -11,6 +11,8 @@ from __future__ import annotations
 import pandas as pd
 import streamlit as st
 
+from data import ordenar_meses
+
 
 def _selecionados_ou_todos(selecionados: list, opcoes: list) -> list:
     return selecionados if selecionados else opcoes
@@ -20,11 +22,15 @@ def barra_lateral(df: pd.DataFrame) -> pd.DataFrame:
     with st.sidebar:
         st.subheader("Filtros")
 
-        conjuntos = sorted(df["Conjunto"].dropna().unique())
+        meses = ordenar_meses(df["Mês"].dropna().unique())
+        meses_selecionados = st.multiselect("Mês", meses, placeholder="Todos os meses")
+        df_mes = df[df["Mês"].isin(_selecionados_ou_todos(meses_selecionados, meses))]
+
+        conjuntos = sorted(df_mes["Conjunto"].dropna().unique())
         conjuntos_selecionados = st.multiselect(
             "Conjunto de dados", conjuntos, placeholder="Todos os conjuntos"
         )
-        df_conjunto = df[df["Conjunto"].isin(_selecionados_ou_todos(conjuntos_selecionados, conjuntos))]
+        df_conjunto = df_mes[df_mes["Conjunto"].isin(_selecionados_ou_todos(conjuntos_selecionados, conjuntos))]
 
         polos = sorted(df_conjunto["Polo"].dropna().unique())
         polos_selecionados = st.multiselect("Polo", polos, placeholder="Todos os polos")
