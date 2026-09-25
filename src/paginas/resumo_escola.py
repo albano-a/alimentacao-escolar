@@ -6,6 +6,7 @@ import pandas as pd
 import streamlit as st
 
 import charts
+from data import FLAGS
 from formatting import formatar
 
 _COLUNAS_SOMADAS = [
@@ -27,6 +28,14 @@ def _resumo_escola(linhas: pd.DataFrame) -> pd.Series:
     resumo[_COLUNAS_SOMADAS] = linhas[_COLUNAS_SOMADAS].sum()
     resumo["Categoria"] = " / ".join(sorted(linhas["Categoria"].unique()))
     resumo["Dias letivos"] = linhas["Dias letivos"].max()
+    # Matriculados se repete por turma (é o total da escola), então usa o máximo.
+    if "Matriculados" in linhas.columns:
+        resumo["Matriculados"] = linhas["Matriculados"].max()
+    # Flags: basta uma turma com TRUE para marcar a escola.
+    for flag in FLAGS:
+        if flag in linhas.columns:
+            valores = linhas[flag].dropna()
+            resumo[flag] = bool(valores.any()) if not valores.empty else pd.NA
     return resumo
 
 
@@ -53,11 +62,24 @@ def renderizar(df: pd.DataFrame) -> None:
         )
 
     with st.container(border=True):
-        col1, col2, col3, col4 = st.columns(4)
+        col1, col2, col3, col4, col5 = st.columns(5)
         col1.metric("Polo", linha["Polo"])
-        col2.metric("Dias letivos", formatar(linha["Dias letivos"]))
-        col3.metric("Total de refeições", formatar(linha["Total de refeições"]))
-        col4.metric("Média/dia (total)", formatar(linha["Média/dia - Total"], 1))
+        col2.metric("Matriculados", formatar(linha.get("Matriculados")))
+        col3.metric("Dias letivos", formatar(linha["Dias letivos"]))
+        col4.metric("Total de refeições", formatar(linha["Total de refeições"]))
+        col5.metric("Média/dia (total)", formatar(linha["Média/dia - Total"], 1))
+
+    matriculados = linha.get("Matriculados")
+    if matriculados and matriculados > 0:
+        st.caption(
+            f"Refeições por matriculado: {linha['Total de refeições'] / matriculados:.1f} "
+            f"no período ({formatar(linha['Total de refeições'])} refeições / "
+            f"{formatar(matriculados)} matriculados)."
+        )
+
+    flags_marcadas = [f for f in FLAGS if f in linhas.columns and bool(linhas[f].eq(True).any())]
+    if flags_marcadas:
+        st.info(f"📌 Acompanhamento registrado: {', '.join(flags_marcadas)}.")
 
     col_esq, col_dir = st.columns([1, 1.4])
     with col_esq:

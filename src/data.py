@@ -17,11 +17,15 @@ precisar mexer no código, desde que sigam o mesmo padrão de linha marcadora.
 from __future__ import annotations
 
 import re
+import unicodedata
 import urllib.parse
 
 import pandas as pd
 
 REFEICOES = ["Desjejum", "Lanche", "Almoço", "Janta"]
+
+# Colunas de acompanhamento da planilha (TRUE/FALSE por turma/mês).
+FLAGS = ["Visita técnica", "Checklist", "Reunião", "Denúncia"]
 
 PLANILHA_ID = "1nnJbOgg5OGli_5m-cm90A3qKT2xgZynV-0nwWtbV2iI"
 
@@ -120,6 +124,76 @@ def _para_numero(serie: pd.Series) -> pd.Series:
     return pd.to_numeric(limpo, errors="coerce")
 
 
+def _para_bool(serie: pd.Series) -> pd.Series:
+    """Converte as colunas de acompanhamento ('TRUE'/'FALSE') para boolean."""
+    mapeado = serie.astype(str).str.strip().str.upper().map({"TRUE": True, "FALSE": False})
+    return mapeado.astype("boolean")
+
+
+_COLUNAS_ALVO = (
+    "modalidade",
+    "matriculados",
+    "dias letivos",
+    "desjejum",
+    "lanche",
+    "almoco",
+    "janta",
+    "visita tecnica",
+    "checklist",
+    "reuniao",
+    "denuncia",
+)
+
+# Posições conhecidas hoje (linha de cabeçalho da 1ª linha do CSV). Usadas só
+# como fallback se o cabeçalho vier vazio/ilegível — o caminho normal é
+# localizar cada coluna pelo nome (ver `_mapa_colunas`).
+_POSICOES_FALLBACK = {
+    "modalidade": 2,
+    "matriculados": 3,
+    "dias letivos": 4,
+    "desjejum": 5,
+    "lanche": 6,
+    "almoco": 7,
+    "janta": 8,
+    "visita tecnica": 15,
+    "checklist": 16,
+    "reuniao": 17,
+    "denuncia": 18,
+}
+
+# Nome normalizado (ver `_normaliza_cabecalho`) -> nome exibido na dashboard.
+_NOME_FLAG = {
+    "visita tecnica": "Visita técnica",
+    "checklist": "Checklist",
+    "reuniao": "Reunião",
+    "denuncia": "Denúncia",
+}
+
+
+def _normaliza_cabecalho(valor: object) -> str:
+    """Normaliza um nome de coluna da planilha ('Almoço ' -> 'almoco')."""
+    texto = unicodedata.normalize("NFKD", str(valor)).encode("ascii", "ignore").decode()
+    texto = texto.lower().strip()
+    return re.sub(r"\s+", " ", texto)
+
+
+def _mapa_colunas(linha: pd.Series) -> dict[str, int]:
+    """Localiza as colunas de interesse pelo nome do cabeçalho, não pela posição.
+
+    Devolve nome normalizado -> posição. A coluna da escola não tem cabeçalho
+    próprio (a célula dela na linha de cabeçalho é o título decorativo do
+    relatório), então quem chama deriva como `modalidade - 1`.
+    """
+    mapa: dict[str, int] = {}
+    for pos, valor in enumerate(linha):
+        if pd.isna(valor):
+            continue
+        nome = _normaliza_cabecalho(valor)
+        if nome in _COLUNAS_ALVO and nome not in mapa:
+            mapa[nome] = pos
+    return mapa
+
+
 def _url_aba(nome_aba: str) -> str:
     """URL de exportação CSV (gviz) de uma aba específica da planilha pública."""
     query = urllib.parse.quote(nome_aba)
@@ -154,17 +228,43 @@ def ordenar_meses(meses: list[str]) -> list[str]:
     return sorted(meses, key=chave)
 
 
+def total_matriculados(df: pd.DataFrame) -> float:
+    """Soma os matriculados sem duplicar: a planilha repete o total da escola
+    em cada linha de turma/modalidade, então usa o máximo por
+    (Conjunto, Escola, Mês) antes de somar."""
+    chaves = [c for c in ("Conjunto", "Escola", "Mês") if c in df.columns]
+    if not chaves or "Matriculados" not in df.columns:
+        return float("nan")
+    return df.groupby(chaves)["Matriculados"].max().sum()
+
+
 def _carregar_aba(nome_aba: str) -> pd.DataFrame:
     """Lê uma aba no formato 'mapa de controle' e devolve uma tabela normal,
-    com Polo como coluna e Total/Média recalculados a partir dos dados brutos."""
+    com Polo como coluna e Total/Média recalculados a partir dos dados brutos.
+
+    As colunas são localizadas pelo nome no cabeçalho (ex.: 'Dias letivos'),
+    não pela posição — se a ordem/colunas mudarem na planilha, o mapa é
+    refeito a cada linha de cabeçalho de bloco de mês encontrada.
+    """
     bruto = pd.read_csv(_url_aba(nome_aba), header=None, dtype=str)
+
+    idx = _mapa_colunas(bruto.iloc[0])
+    for chave, pos in _POSICOES_FALLBACK.items():
+        idx.setdefault(chave, pos)
 
     polo_atual = _extrai_polo_inicial(bruto.iat[0, 1])
     mes_atual = _extrai_mes(bruto.iat[0, 1]) or "Sem mês"
     linhas = []
     for _, linha in bruto.iloc[1:].iterrows():
-        escola = linha[1]
-        modalidade = linha[2]
+        novo_mapa = _mapa_colunas(linha)
+        if "modalidade" in novo_mapa:
+            # Linha de cabeçalho que separa cada bloco de mês — atualiza o mapa
+            # (os blocos seguintes podem reordenar colunas) e pula a linha.
+            idx.update(novo_mapa)
+            continue
+        i_escola = idx["modalidade"] - 1
+        escola = linha.iloc[i_escola]
+        modalidade = linha.iloc[idx["modalidade"]]
         if pd.isna(escola):
             continue
         escola = str(escola).strip()
@@ -188,19 +288,28 @@ def _carregar_aba(nome_aba: str) -> pd.DataFrame:
                 "Polo": polo_atual,
                 "Escola": escola,
                 "Categoria": _extrai_categoria(str(modalidade)),
-                "Dias letivos": linha[3],
-                "Desjejum": linha[4],
-                "Lanche": linha[5],
-                "Almoço": linha[6],
-                "Janta": linha[7],
+                "Matriculados": linha.iloc[idx["matriculados"]],
+                "Dias letivos": linha.iloc[idx["dias letivos"]],
+                "Desjejum": linha.iloc[idx["desjejum"]],
+                "Lanche": linha.iloc[idx["lanche"]],
+                "Almoço": linha.iloc[idx["almoco"]],
+                "Janta": linha.iloc[idx["janta"]],
+                "Visita técnica": linha.iloc[idx["visita tecnica"]],
+                "Checklist": linha.iloc[idx["checklist"]],
+                "Reunião": linha.iloc[idx["reuniao"]],
+                "Denúncia": linha.iloc[idx["denuncia"]],
             }
         )
 
     df = pd.DataFrame(linhas)
     df["Grupo categoria"] = df["Categoria"].map(lambda c: GRUPOS_CATEGORIA.get(c, "Não informado"))
+    df["Matriculados"] = _para_numero(df["Matriculados"])
     df["Dias letivos"] = _para_numero(df["Dias letivos"])
     for col in REFEICOES:
         df[col] = _para_numero(df[col])
+    for col in FLAGS:
+        if col in df.columns:
+            df[col] = _para_bool(df[col])
 
     df["Total de refeições"] = df[REFEICOES].sum(axis=1, min_count=1)
     for col in REFEICOES:

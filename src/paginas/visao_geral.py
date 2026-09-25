@@ -7,6 +7,8 @@ import streamlit as st
 
 import charts
 import kpis
+from data import FLAGS
+from formatting import formatar
 
 
 def renderizar(df: pd.DataFrame) -> None:
@@ -16,6 +18,7 @@ def renderizar(df: pd.DataFrame) -> None:
 
     kpis.renderizar(df)
     _alertas_minimo(df)
+    _acompanhamento(df)
 
     col_esq, col_dir = st.columns(2)
     with col_esq:
@@ -64,3 +67,30 @@ def _alertas_minimo(df: pd.DataFrame) -> None:
         "da Resolução CD/FNDE nº 26/2013. Veja a página **Conformidade FNDE** na "
         "barra lateral para o detalhe."
     )
+
+
+def _acompanhamento(df: pd.DataFrame) -> None:
+    """Resumo das flags de acompanhamento da planilha (visita/checklist/reunião/denúncia)."""
+    flags_presentes = [c for c in FLAGS if c in df.columns]
+    if not flags_presentes:
+        return
+    tem_flag = df[flags_presentes].eq(True).any(axis=1)
+    if not tem_flag.any():
+        return
+
+    denominadas = df.loc[df["Denúncia"].eq(True)] if "Denúncia" in df.columns else df.iloc[0:0]
+    if not denominadas.empty:
+        st.warning(f"🚨 {len(denominadas)} turma(s) com denúncia registrada no filtro atual.")
+
+    with st.container(border=True):
+        st.caption("Acompanhamento (turmas com registro na planilha)")
+        cols = st.columns(len(flags_presentes))
+        for col, flag in zip(cols, flags_presentes):
+            col.metric(flag, formatar(df[flag].eq(True).sum()))
+        with st.expander("Ver turmas com acompanhamento"):
+            colunas = ["Mês", "Polo", "Escola", "Categoria", *flags_presentes]
+            st.dataframe(
+                df.loc[tem_flag, colunas].sort_values(["Mês", "Escola"]),
+                use_container_width=True,
+                hide_index=True,
+            )

@@ -5,19 +5,27 @@ from __future__ import annotations
 import pandas as pd
 import streamlit as st
 
-from data import GRUPOS_ORDEM, REFEICOES
+from data import GRUPOS_ORDEM, REFEICOES, total_matriculados
 from formatting import formatar
 
 
 def renderizar(df: pd.DataFrame) -> None:
     grupos_presentes = df["Grupo categoria"].dropna().unique()
+    matriculados = total_matriculados(df)
+    total_refeicoes = df["Total de refeições"].sum()
+    per_capita = total_refeicoes / matriculados if matriculados else float("nan")
 
     with st.container(border=True):
-        col1, col2, col3, col4, col5 = st.columns(5)
+        col1, col2, col3, col4, col5, col6 = st.columns(6)
         col1.metric("Escolas/Unidades", formatar(df["Escola"].nunique()))
-        col2.metric("Total de refeições", formatar(df["Total de refeições"].sum()))
+        col2.metric("Matriculados", formatar(matriculados))
+        col3.metric(
+            "Total de refeições",
+            formatar(total_refeicoes),
+            help=f"Refeições por matriculado no filtro atual: {formatar(per_capita, 1)}.",
+        )
         if len(grupos_presentes) > 1:
-            col3.metric(
+            col4.metric(
                 "Média/dia (total)",
                 "—",
                 help=(
@@ -27,10 +35,10 @@ def renderizar(df: pd.DataFrame) -> None:
                 ),
             )
         else:
-            col3.metric("Média/dia (total)", formatar(df["Média/dia - Total"].mean(), 1))
-        col4.metric("Polos", df["Polo"].nunique())
+            col4.metric("Média/dia (total)", formatar(df["Média/dia - Total"].mean(), 1))
+        col5.metric("Polos", df["Polo"].nunique())
         nao_conformes = (df["Conforme FNDE (Art. 14)"] == False).sum()  # noqa: E712 (comparação com <NA> precisa ser explícita)
-        col5.metric(
+        col6.metric(
             "Fora do mínimo FNDE",
             formatar(nao_conformes),
             help=(
