@@ -12,9 +12,16 @@ from formatting import formatar
 _COLUNAS_SOMADAS = [
     *charts.REFEICOES,
     "Total de refeições",
-    *[f"Média/dia - {c}" for c in charts.REFEICOES],
-    "Média/dia - Total",
 ]
+
+
+def _dias_totais(linhas: pd.DataFrame):
+    """Dias letivos no período: soma dos dias de cada mês (máximo entre as
+    turmas do mesmo escola/mês — são sempre iguais). Usar só o máximo
+    subconta quando há vários meses filtrados."""
+    if "Mês" in linhas.columns:
+        return linhas.groupby("Mês")["Dias letivos"].max().sum()
+    return linhas["Dias letivos"].max()
 
 
 def _resumo_escola(linhas: pd.DataFrame) -> pd.Series:
@@ -25,9 +32,15 @@ def _resumo_escola(linhas: pd.DataFrame) -> pd.Series:
         return linhas.iloc[0]
 
     resumo = linhas.iloc[0].copy()
-    resumo[_COLUNAS_SOMADAS] = linhas[_COLUNAS_SOMADAS].sum()
+    resumo[_COLUNAS_SOMADAS] = linhas[_COLUNAS_SOMADAS].sum(min_count=1)
     resumo["Categoria"] = " / ".join(sorted(linhas["Categoria"].unique()))
-    resumo["Dias letivos"] = linhas["Dias letivos"].max()
+    dias = _dias_totais(linhas)
+    resumo["Dias letivos"] = dias
+    for c in charts.REFEICOES:
+        total_c = resumo.get(c)
+        resumo[f"Média/dia - {c}"] = round(float(total_c) / float(dias), 1) if pd.notna(total_c) and pd.notna(dias) and dias else pd.NA
+    total_geral = resumo.get("Total de refeições")
+    resumo["Média/dia - Total"] = round(float(total_geral) / float(dias), 1) if pd.notna(total_geral) and pd.notna(dias) and dias else pd.NA
     # Matriculados se repete por turma (é o total da escola), então usa o máximo.
     if "Matriculados" in linhas.columns:
         resumo["Matriculados"] = linhas["Matriculados"].max()
@@ -88,15 +101,22 @@ def renderizar(df: pd.DataFrame) -> None:
     with col_dir:
         with st.container(border=True):
             st.plotly_chart(
-                charts.grafico_comparacao_escola(linha, df), use_container_width=True
+                charts.grafico_comparacao_escola(linhas, df), use_container_width=True
             )
 
-    media_geral = df["Média/dia - Total"].mean()
-    diferenca = linha["Média/dia - Total"] - media_geral
+    regime = linhas["Regime"].iloc[0] if "Regime" in linhas.columns else None
+    base = charts._media_diaria_por_escola_mes(
+        df.loc[df["Regime"] == regime] if regime is not None and "Regime" in df.columns else df
+    )
+    media_escola = base.loc[base["Escola"] == escola_selecionada, "Média/dia - Total"].mean()
+    media_geral = base["Média/dia - Total"].mean()
+    diferenca = media_escola - media_geral
     sinal = "acima" if diferenca >= 0 else "abaixo"
+    rotulo_regime = f" do regime {regime}" if pd.notna(regime) else ""
     st.caption(
-        f"A média/dia total desta escola está {abs(diferenca):.1f} refeições "
-        f"{sinal} da média geral do conjunto ({media_geral:.1f})."
+        f"Média/dia total desta escola (média mensal por escola): {media_escola:.1f} — "
+        f"{abs(diferenca):.1f} refeições {sinal} da média geral{rotulo_regime} "
+        f"por escola/mês ({media_geral:.1f})."
     )
 
     with st.expander("Ver linhas completas de dados"):

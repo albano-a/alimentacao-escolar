@@ -222,29 +222,80 @@ def grafico_perfil_escola(linha: pd.Series) -> go.Figure:
     return fig
 
 
-def grafico_comparacao_escola(linha: pd.Series, df: pd.DataFrame) -> go.Figure:
-    """Compara a média/dia da escola com a média do polo e a média geral do conjunto."""
-    polo = linha.get("Polo")
-    media_cols = [f"Média/dia - {c}" for c in REFEICOES if f"Média/dia - {c}" in df.columns]
-    escola_vals = [linha.get(c) for c in media_cols]
-    polo_vals = df.loc[df["Polo"] == polo, media_cols].mean().round(1)
-    geral_vals = df[media_cols].mean().round(1)
+def _media_diaria_por_escola_mes(df: pd.DataFrame) -> pd.DataFrame:
+    """Agrega do grão turma/mês para escola/mês e recalcula a média/dia.
 
+    Somar a coluna ``Média/dia`` entre turmas/meses infla a escola (era o bug
+    do gráfico Escola x polo x geral). Aqui soma os totais e divide pelos dias
+    letivos do mês (máximo entre as turmas — são sempre iguais no mesmo
+    escola/mês), obtendo uma média/dia por escola/mês comparável."""
+    cols = [c for c in REFEICOES if c in df.columns]
+    chaves = [c for c in ["Mês", "Escola", "Polo", "Regime"] if c in df.columns]
+    if not chaves:
+        return pd.DataFrame()
+    agregado = df.groupby(chaves, as_index=False).agg(
+        **{c: (c, lambda s: s.sum(min_count=1)) for c in cols},
+        **({"Dias letivos": ("Dias letivos", "max")} if "Dias letivos" in df.columns else {}),
+    )
+    dias = agregado.get("Dias letivos")
+    for c in cols:
+        media = f"Média/dia - {c}"
+        agregado[media] = (agregado[c] / dias).round(1) if dias is not None else pd.NA
+    total = agregado[cols].sum(axis=1, min_count=1) if cols else pd.NA
+    agregado["Média/dia - Total"] = (total / dias).round(1) if dias is not None else pd.NA
+    return agregado
+
+
+def grafico_comparacao_escola(linhas_escola: pd.DataFrame, df: pd.DataFrame) -> go.Figure:
+    """Compara a média/dia da escola com a média do polo e a média geral, por mês.
+
+    Tudo no grão escola/mês (ver ``_media_diaria_por_escola_mes``) e restrito ao
+    mesmo regime da escola (Integral ou Parcial), para não misturar escalas
+    muito diferentes. Cada faceta é um tipo de refeição, com um grupo de barras
+    por mês."""
+    from data import ordenar_meses
+
+    escola = linhas_escola["Escola"].iloc[0] if "Escola" in linhas_escola.columns else "Escola"
+    polo = linhas_escola["Polo"].iloc[0] if "Polo" in linhas_escola.columns else None
+    regime = linhas_escola["Regime"].iloc[0] if "Regime" in linhas_escola.columns else None
+
+    base = df
+    if "Regime" in df.columns and pd.notna(regime):
+        base = df.loc[df["Regime"] == regime]
+    base = _media_diaria_por_escola_mes(base)
+    media_cols = [f"Média/dia - {c}" for c in REFEICOES if f"Média/dia - {c}" in base.columns]
     rotulos = [c.replace("Média/dia - ", "") for c in media_cols]
-    comparacao = pd.DataFrame(
-        {
-            "Refeição": rotulos * 3,
-            "Média/dia": list(escola_vals) + list(polo_vals) + list(geral_vals),
-            "Referência": (
-                [linha.get("Escola", "Escola")] * len(rotulos)
-                + [f"Média do {polo}"] * len(rotulos)
-                + ["Média geral"] * len(rotulos)
-            ),
-        }
-    )
+
+    meses = ordenar_meses([m for m in linhas_escola["Mês"].dropna().unique()]) if "Mês" in linhas_escola.columns else []
+    escola_mes = base.loc[base["Escola"] == escola].set_index("Mês") if not base.empty else pd.DataFrame()
+    nome_escola = str(escola)
+    nome_polo = f"Média do {polo} ({regime})" if polo and regime else f"Média do {polo}" if polo else "Média do polo"
+    nome_geral = f"Média geral ({regime})" if regime else "Média geral"
+
+    registros = []
+    for mes in meses:
+        vals_escola = [escola_mes.loc[mes, c] if mes in getattr(escola_mes, "index", []) else pd.NA for c in media_cols]
+        polo_vals = base.loc[(base["Polo"] == polo) & (base["Mês"] == mes), media_cols].mean() if polo else pd.Series(dtype=float)
+        geral_vals = base.loc[base["Mês"] == mes, media_cols].mean()
+        for rot, ve, vp, vg in zip(
+            rotulos, vals_escola,
+            [polo_vals.get(c, pd.NA) for c in media_cols],
+            [geral_vals.get(c, pd.NA) for c in media_cols],
+        ):
+            registros.append({"Mês": mes, "Refeição": rot, "Média/dia": ve, "Referência": nome_escola})
+            registros.append({"Mês": mes, "Refeição": rot, "Média/dia": vp, "Referência": nome_polo})
+            registros.append({"Mês": mes, "Refeição": rot, "Média/dia": vg, "Referência": nome_geral})
+    comparacao = pd.DataFrame(registros)
+    titulo_regime = f" — {regime}" if regime else ""
     fig = px.bar(
-        comparacao, x="Refeição", y="Média/dia", color="Referência",
-        barmode="group", title="Escola x média do polo x média geral (refeições/dia)",
+        comparacao, x="Mês", y="Média/dia", color="Referência",
+        facet_col="Refeição", facet_col_wrap=2, barmode="group",
+        category_orders={
+            "Mês": meses, "Refeição": rotulos,
+            "Referência": [nome_escola, nome_polo, nome_geral],
+        },
+        title=f"Escola x média do polo x média geral por mês{titulo_regime} (refeições/dia)",
     )
-    fig.update_layout(xaxis_title="")
+    fig.update_layout(xaxis_title="", height=650)
+    fig.update_xaxes(tickangle=-30)
     return fig
